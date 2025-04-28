@@ -21,6 +21,13 @@
 (use-package magit
   :straight t)
 
+(use-package keyfreq
+  :straight t
+
+  :init
+  (keyfreq-mode)
+  (keyfreq-autosave-mode))
+
 (add-to-list 'load-path "~/.emacs.d/site-lisp/emacs-application-framework/")
 (require 'eaf)
 (require 'eaf-browser)
