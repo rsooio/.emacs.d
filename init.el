@@ -39,7 +39,15 @@
   :delight
   (eldoc-mode))
 
+(defun default-project-function-no-tramp (may-prompt)
+  "Project function that ignores remote projects."
+  (if (file-remote-p default-directory)
+      nil
+    (consult--default-project-function may-prompt)))
+
 (use-package consult
+  :custom
+  (consult-project-function #'default-project-function-no-tramp)
   :bind
   (("C-x b" . #'consult-buffer)
    ("C-x r b" . #'consult-bookmark)
