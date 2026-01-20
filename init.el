@@ -92,7 +92,7 @@
   (org-indent-indentation-per-level 2)
   (org-cycle-include-plain-lists 'integrate)
   (org-log-done 'time)
-  (org-special-ctrl-a t)
+  (org-special-ctrl-a/e t)
   (org-special-ctrl-k t)
   (org-duration-format '(("d") (special . 1)))
   (org-effort-units
