@@ -95,7 +95,7 @@
   (org-special-ctrl-a/e t)
   (org-special-ctrl-k t)
   (org-duration-format '(("d") (special . 1)))
-  (org-effort-units
+  (org-duration-units
    `(("min" . 1)
      ("h" . 60)
      ("d" . ,(* 60 8))
