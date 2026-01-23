@@ -21,10 +21,13 @@
   (display-line-numbers-type 'relative)
   (indent-tabs-mode nil)
   (kill-buffer-delete-auto-save-files t)
+  (save-interprogram-paste-before-kill t)
   (tab-width 4)
   (go-ts-mode-indent-offset 4)
   (bookmark-bmenu-file-column 50)
   (frame-title-format '((:eval (if (buffer-file-name) "%f" "%F"))))
+  :bind
+  ("C-x C-b" . #'ibuffer)
   :init
   (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
   (add-to-list 'initial-frame-alist '(fullscreen . maximized))
@@ -33,7 +36,8 @@
     (set-fontset-font (frame-parameter nil 'font) charset (font-spec :family "Unifont")))
   (set-fontset-font (frame-parameter nil 'font) 'emoji (font-spec :family "Symbola"))
   (connection-local-set-profile-variables 'remote-direct-async-process
-                                          '((tramp-direct-async-process . t))))
+                                          '((tramp-direct-async-process . t)))
+  (add-hook 'compilation-filter-hook 'ansi-color-compilation-filter))
 
 (use-package delight
   :delight
@@ -83,7 +87,7 @@
 
 (use-package org
   :custom
-  (org-agenda-files '("/mnt/webdav/org/"))
+  (org-agenda-files '("~/org/"))
   (org-agenda-prefix-format '((agenda . " %i %-12:c%?-12t%-6e% s")
                               (todo . " %i %-12:c %-6e")
                               (tags . " %i %-12:c")
@@ -162,12 +166,16 @@
   ("C-x g t" . (lambda () (interactive) (git-timemachine) (global-display-line-numbers-mode t))))
 
 (use-package diff-hl
-  :init
-  (global-diff-hl-mode)
-  (diff-hl-flydiff-mode)
-  (diff-hl-margin-mode)
+  :hook (magit-post-refresh . diff-hl-magit-post-refresh)
+  :custom-face
+  (diff-hl-insert ((t (:background "green4" :foreground "#eeffee"))))
+  (diff-hl-delete ((t (:background "red3" :foreground "#ffffff"))))
+  (diff-hl-change ((t (:background "blue3" :foreground "#ddddff"))))
   :config
-  (add-hook 'magit-post-refresh-hook #'diff-hl-magit-post-refresh))
+  (diff-hl-margin-mode 1)
+  (diff-hl-flydiff-mode 1)
+  (diff-hl-dired-mode 1)
+  (global-diff-hl-mode t))
 
 (use-package copilot
   :vc (:url "https://github.com/copilot-emacs/copilot.el"
@@ -222,8 +230,9 @@
 
 (use-package orderless
   :custom
-  (completion-styles '(orderless basic flex))
-  (completion-category-overrides '((file (styles partial-completion))))
+  (completion-styles '(orderless basic))
+  ;; (completion-category-overrides '((file (styles partial-completion))))
+  (completion-category-overrides nil)
   (completion-category-defaults nil)
   (completion-pcm-leading-wildcard t))
 
@@ -244,6 +253,7 @@
 (use-package treesit-auto
   :custom
   (treesit-auto-install 'prompt)
+  (treesit-font-lock-level 4)
   :config
   (treesit-auto-add-to-auto-mode-alist 'all)
   (global-treesit-auto-mode))
