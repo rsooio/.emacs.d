@@ -26,6 +26,12 @@
   (go-ts-mode-indent-offset 4)
   (bookmark-bmenu-file-column 50)
   (frame-title-format '((:eval (if (buffer-file-name) "%f" "%F"))))
+  (backup-directory-alist '(("." . (locate-user-emacs-file "backups"))))
+  (backup-by-copying t)
+  (kept-new-versions 10)
+  (kept-old-versions 2)
+  (delete-old-versions t)
+  (version-control t)
   :bind
   ("C-x C-b" . #'ibuffer)
   :init
