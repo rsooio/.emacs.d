@@ -317,3 +317,5 @@
             :rev :newest)
   :config
   (eglot-java-lombok/init))
+
+(use-package cider)
