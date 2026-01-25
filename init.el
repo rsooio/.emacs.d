@@ -1,7 +1,7 @@
 ;; -*- lexical-binding: t; coding: utf-8 -*-
 
 (use-package emacs
-  :ensure t
+  :ensure t ; ensure use-package-ensure is loaded
   :custom
   (face-font-rescale-alist '(("Unifont" . 1.2) ("Symbola" . 1.3))) ; install ttf-symbola for emojis
   (tab-always-indent 'complete)
