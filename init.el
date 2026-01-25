@@ -288,8 +288,8 @@
         ("C-c f" . #'treesit-fold-toggle)))
 
 (use-package eglot
-  :hook
-  ((tsx-ts-mode go-ts-mode typescript-ts-mode) . eglot-ensure)
+  :commands eglot-ensure
+  :hook (typescript-mode tsx-mode go-mode)
   :bind
   (:map eglot-mode-map
         ("C-c l r" . #'eglot-rename)
@@ -302,7 +302,7 @@
 (use-package eglot-java
   :custom
   (eglot-java-java-program "/usr/lib/jvm/java-21-openjdk/bin/java")
-  :hook java-ts-mode
+  :hook java-mode
   :bind
   (:map eglot-java-mode-map
         ("TAB" . #'indent-for-tab-command)
