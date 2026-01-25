@@ -184,7 +184,10 @@
   ("C-x g t" . (lambda () (interactive) (git-timemachine) (global-display-line-numbers-mode t))))
 
 (use-package diff-hl
-  :hook (magit-post-refresh . diff-hl-magit-post-refresh)
+  :after magit
+  :hook ((magit-post-refresh . diff-hl-magit-post-refresh)
+         (magit-pre-refresh . diff-hl-magit-pre-refresh)
+         (dired-mode . diff-hl-dired-mode))
   :custom-face
   (diff-hl-insert ((t (:background "green4" :foreground "#eeffee"))))
   (diff-hl-delete ((t (:background "red3" :foreground "#ffffff"))))
@@ -192,8 +195,7 @@
   :config
   (diff-hl-margin-mode 1)
   (diff-hl-flydiff-mode 1)
-  (diff-hl-dired-mode 1)
-  (global-diff-hl-mode t))
+  (global-diff-hl-mode 1))
 
 (use-package copilot
   :vc (:url "https://github.com/copilot-emacs/copilot.el"
