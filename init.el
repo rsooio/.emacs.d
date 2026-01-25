@@ -49,6 +49,18 @@
   :delight
   (eldoc-mode))
 
+(use-package paredit
+  :hook (lisp-data-mode clojure-mode cider-repl-mode)
+  :bind
+  (:map paredit-mode-map
+        ("C-<backspace>" . #'paredit-backward-delete)
+        ("[" . #'paredit-open-square)
+        ("{" . #'paredit-open-curly)
+        ("]" . #'paredit-close-square)
+        ("}" . #'paredit-close-curly)
+        ("M-[" . #'paredit-wrap-square)
+        ("M-{" . #'paredit-wrap-curly)))
+
 (defun default-project-function-no-tramp (may-prompt)
   "Project function that ignores remote projects."
   (if (file-remote-p default-directory)
