@@ -53,7 +53,7 @@
   :hook (lisp-data-mode clojure-mode cider-repl-mode)
   :bind
   (:map paredit-mode-map
-        ("C-<backspace>" . #'paredit-backward-delete)
+        ("C-<backspace>" . #'paredit-backward-kill-word)
         ("[" . #'paredit-open-square)
         ("{" . #'paredit-open-curly)
         ("]" . #'paredit-close-square)
@@ -318,4 +318,5 @@
   :config
   (eglot-java-lombok/init))
 
-(use-package cider)
+(use-package clojure-mode
+  :mode "\\.bb\\'")
