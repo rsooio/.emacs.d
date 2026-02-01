@@ -2,6 +2,10 @@
 
 (use-package emacs
   :ensure t ; ensure use-package-ensure is loaded
+  :hook
+  ((prog-mode . display-fill-column-indicator-mode)
+   (before-save . delete-trailing-whitespace)
+   ((lisp-data-mode clojure-mode) . hs-minor-mode))
   :custom
   (face-font-rescale-alist '(("Unifont" . 1.2) ("Symbola" . 1.3))) ; install ttf-symbola for emojis
   (tab-always-indent 'complete)
@@ -32,8 +36,10 @@
   (kept-old-versions 2)
   (delete-old-versions t)
   (version-control t)
+  (fill-column 80)
   :bind
   ("C-x C-b" . #'ibuffer)
+  (:map hs-minor-mode-map ("<backtab>" . #'hs-toggle-hiding))
   :init
   (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
   (add-to-list 'initial-frame-alist '(fullscreen . maximized))
@@ -320,3 +326,7 @@
 
 (use-package clojure-mode
   :mode "\\.bb\\'")
+
+(use-package cider
+  :custom
+  (cider-repl-display-help-banner nil))
