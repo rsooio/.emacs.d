@@ -29,7 +29,7 @@
   (tab-width 4)
   (go-ts-mode-indent-offset 4)
   (bookmark-bmenu-file-column 50)
-  (frame-title-format '((:eval (if (buffer-file-name) "%f" "%F"))))
+  (frame-title-format '(:eval (or (buffer-file-name) default-directory)))
   (backup-directory-alist '(("." . (locate-user-emacs-file "backups"))))
   (backup-by-copying t)
   (kept-new-versions 10)
@@ -37,6 +37,7 @@
   (delete-old-versions t)
   (version-control t)
   (fill-column 80)
+  (compilation-scroll-output t)
   :bind
   ("C-x C-b" . #'ibuffer)
   (:map hs-minor-mode-map ("<backtab>" . #'hs-toggle-hiding))
@@ -49,7 +50,8 @@
   (set-fontset-font (frame-parameter nil 'font) 'emoji (font-spec :family "Symbola"))
   (connection-local-set-profile-variables 'remote-direct-async-process
                                           '((tramp-direct-async-process . t)))
-  (add-hook 'compilation-filter-hook 'ansi-color-compilation-filter))
+  (add-hook 'compilation-filter-hook 'ansi-color-compilation-filter)
+  (setopt use-short-answers t))
 
 (use-package delight
   :delight
@@ -303,19 +305,123 @@
         ("C-c l s" . #'eglot-shutdown)
         ("C-c l i" . #'eglot-find-implementation)))
 
+(defun custom-eglot-java-init-opts (server eglot-java-eclipse-jdt)
+  '(:settings
+    (:java
+     (:format
+      (:settings
+       (:url "https://raw.githubusercontent.com/google/styleguide/gh-pages/eclipse-java-google-style.xml")
+       :enabled t)))))
+
+(defun find-file-recursively-upward (filename &optional start-dir)
+  "Search for FILENAME recursively upward from START-DIR or current directory."
+  (let ((dir (file-name-as-directory (or start-dir default-directory))))
+    (cond ((file-exists-p (expand-file-name filename dir))
+           (expand-file-name filename dir))
+          ((equal dir "/") nil)
+          (t (find-file-recursively-upward filename (file-name-directory (directory-file-name dir)))))))
+
+(defun buffer-regex-search (regex &optional num)
+  "Search for REGEX in the current buffer and return the match string."
+  (save-excursion
+    (goto-char (point-min))
+    (when (re-search-forward regex nil t)
+      (substring-no-properties (match-string (or num 0))))))
+
+(defun which-java-package ()
+  "Get the current Java package name based on buffer content."
+  (buffer-regex-search
+   "package\\s-+\\([a-zA-Z0-9_.]+\\)\\s-*;" 1))
+
+(defun which-java-class ()
+  "Get the current Java class name based on buffer content."
+  (buffer-regex-search
+   "class\\s-+\\([A-Za-z0-9_]+\\)" 1))
+
+(defun which-java-function ()
+  "Get the current Java function name based on cursor position."
+  (let ((func (which-function)))
+    (when func
+      (car (last (split-string func "\\."))))))
+
+(defun java-current-class-name ()
+  "Get the current Java class name based on buffer content."
+  (let ((package-name (buffer-regex-search
+                       "package\\s-+\\([a-zA-Z0-9_.]+\\)\\s-*;" 1))
+        (class-name (buffer-regex-search
+                     "class\\s-+\\([A-Za-z0-9_]+\\)" 1)))
+    (when (and class-name package-name)
+      (concat package-name "." class-name))))
+
+(defun java-run (cmd)
+  "Run a Java command CMD in the context of the current project."
+  (if-let* ((project (project-current))
+            (root (project-root project))
+            (cfg (cond ((file-exists-p (file-name-concat root "build.gradle"))
+                        "build.gradle")
+                       ((file-exists-p (file-name-concat root "pom.xml"))
+                        "pom.xml"))))
+      (cond ((string= cfg "pom.xml")
+             (let ((mvn-cmd (if (file-exists-p (file-name-concat root "mvnw"))
+                               (file-name-concat root "mvnw")  "mvn"))
+                   (path (find-file-recursively-upward cfg))
+                   (compilation-buffer-name-function
+                    (or project-compilation-buffer-name-function
+                        compilation-buffer-name-function))
+                   (default-directory root))
+               (compile (format "%s -f %s %s" mvn-cmd path cmd))))
+            ((string= cfg "build.gradle")
+             (message "Not implemented yet.")))
+    (message "No project found.")))
+
+(defun java-test-package ()
+  "Run java test for current package."
+  (interactive)
+  (java-run "test"))
+
+(defun java-test-class ()
+  "Run java test for current class."
+  (interactive)
+  (let ((class-name (java-current-class-name)))
+    (if class-name
+        (java-run (format "test -Dtest=%s" class-name))
+      (message "Cannot determine class name"))))
+
+(defun java-test-function ()
+  "Run java test for current function."
+  (interactive)
+  (let ((class-name (java-current-class-name))
+        (function-name (which-java-function)))
+    (if (and class-name function-name)
+        (java-run (format "test -Dtest=%s#%s" class-name function-name))
+      (message "Cannot determine class or function"))))
+
+(defun java-test (arg)
+  "Run java test."
+  (interactive "P")
+  (cond ((equal arg '(4)) (java-test-class))
+        ((equal arg '(16)) (java-test-function))
+        (t (java-test-package))))
+
+(defun java-start ()
+  "Start java application."
+  (interactive)
+  (java-run "spring-boot:run"))
+
 (use-package eglot-java
   :custom
   (eglot-java-java-program "/usr/lib/jvm/java-21-openjdk/bin/java")
-  :hook java-mode
+  (eglot-java-user-init-opts-fn 'custom-eglot-java-init-opts)
+  :hook java-ts-mode
   :bind
   (:map eglot-java-mode-map
         ("TAB" . #'indent-for-tab-command)
-        ("C-c l n" . #'eglot-java-file-new)
-        ("C-c l x" . #'eglot-java-run-main)
-        ("C-c l t" . #'eglot-java-run-test)
-        ("C-c l N" . #'eglot-java-project-new)
-        ("C-c l T" . #'eglot-java-project-build-task)
-        ("C-c l R" . #'eglot-java-project-build-refresh)))
+        ("C-c C-x x" . #'java-start)
+        ("C-c C-x n" . #'eglot-java-file-new)
+        ("C-c C-x N" . #'eglot-java-project-new)
+        ("C-c C-x t" . #'java-test)
+        ("C-c C-x T" . #'eglot-java-project-build-task)
+        ("C-c C-x R" . #'eglot-java-project-build-refresh)))
 
 (use-package eglot-java-lombok
   :after eglot-java
@@ -328,5 +434,9 @@
   :mode "\\.bb\\'")
 
 (use-package cider
+  :hook clojure-mode
   :custom
-  (cider-repl-display-help-banner nil))
+  (cider-jack-in-default 'babashka)
+  (cider-repl-display-help-banner nil)
+  (cider-allow-jack-in-without-project t)
+  (cider-font-lock-dynamically '(macro core function var deprecated)))
