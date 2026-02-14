@@ -4,10 +4,11 @@
   :ensure t ; ensure use-package-ensure is loaded
   :hook
   ((prog-mode . display-fill-column-indicator-mode)
-   (before-save . delete-trailing-whitespace)
-   ((lisp-data-mode clojure-mode) . hs-minor-mode))
+   (before-save . delete-trailing-whitespace))
   :custom
-  (face-font-rescale-alist '(("Unifont" . 1.2) ("Symbola" . 1.3))) ; install ttf-symbola for emojis
+  ;; install ttf-symbola for emojis
+  (face-font-rescale-alist '(("Unifont" . 1.2) ("Symbola" . 1.3)))
+  (custom-file (locate-user-emacs-file "custom.el"))
   (tab-always-indent 'complete)
   (use-package-always-ensure t)
   (warning-minimum-level :error)
@@ -38,20 +39,30 @@
   (version-control t)
   (fill-column 80)
   (compilation-scroll-output t)
+  (compilation-max-output-line-length nil)
   :bind
   ("C-x C-b" . #'ibuffer)
-  (:map hs-minor-mode-map ("<backtab>" . #'hs-toggle-hiding))
   :init
   (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
   (add-to-list 'initial-frame-alist '(fullscreen . maximized))
-  (set-frame-font (format "JetBrainsMonoNerdFontMono %d" (/ (display-pixel-height) 80)))
+  (set-frame-font (format "JetBrainsMonoNerdFontMono %d"
+                          (/ (display-pixel-height) 80)))
   (dolist (charset '(kana han symbol cjk-misc bopomofo))
-    (set-fontset-font (frame-parameter nil 'font) charset (font-spec :family "Unifont")))
-  (set-fontset-font (frame-parameter nil 'font) 'emoji (font-spec :family "Symbola"))
+    (set-fontset-font (frame-parameter nil 'font) charset
+                      (font-spec :family "Unifont")))
+  (set-fontset-font (frame-parameter nil 'font) 'emoji
+                    (font-spec :family "Symbola"))
   (connection-local-set-profile-variables 'remote-direct-async-process
                                           '((tramp-direct-async-process . t)))
   (add-hook 'compilation-filter-hook 'ansi-color-compilation-filter)
   (setopt use-short-answers t))
+
+(use-package hs-minor-mode
+  :ensure nil
+  :hook prog-mode
+  :bind
+  (:map hs-minor-mode-map
+        ("<backtab>" . #'hs-toggle-hiding)))
 
 (use-package delight
   :delight
@@ -180,16 +191,61 @@
         (princ line)
         (princ "\n")))))
 
+(use-package swagg)
+
+(defun apifox-upload ()
+  "Upload API definitions to Apifox."
+  (interactive)
+  (if-let* ((definition (swagg--select-definition))
+            (name (plist-get definition :name))
+            (json (plist-get definition :json))
+            (url (format "https://api.apifox.com/v1/projects/%s/import-openapi"
+                         apifox-project-id))
+            (folder (plist-get definition :apifox-folder))
+            (api-key (getenv "APIFOX_API_KEY"))
+            (docs (shell-command-to-string (format "curl -s %s" json)))
+            (command (format
+                      "curl -s %s \\
+                           -H 'X-Apifox-Api-Version: 2024-03-28' \\
+                           -H 'Authorization: Bearer %s' \\
+                           -H 'Content-Type: application/json' \\
+                           -d '{
+                               \"input\": %s,
+                               \"options\": {
+                                   \"targetEndpointFolderId\": %s,
+                                   \"endpointOverwriteBehavior\": \"AUTO_MERGE\"
+                               }
+                           }'"
+                      url api-key (json-encode-string docs) folder))
+            (output (shell-command-to-string command)))
+      (message "%s" output)))
+
+(defun save-buffer-without-newline ()
+  "Save the current buffer without adding a newline at the end."
+  (interactive)
+  (let ((require-final-newline nil))
+    (save-buffer)))
+
 (use-package magit
   :custom
-  (magit-display-buffer-function #'magit-display-buffer-same-window-except-diff-v1)
+  (magit-display-buffer-function
+   #'magit-display-buffer-same-window-except-diff-v1)
   :bind
   ("C-x g g" . #'magit-status)
-  ("C-x g b" . #'magit-blame-addition))
+  ("C-x g b" . #'magit-blame-addition)
+  ;; TODO: add margin settings in magit log "Other" section use shortcut "S"
+  ;; :config
+  ;; (transient-append-suffix 'magit-log "b"
+  ;;   '("F" "Margin Settings" magit-margin-settings))
+)
+
+(use-package magit-todos
+  :after magit
+  :config (magit-todos-mode 1))
 
 (use-package git-timemachine
   :bind
-  ("C-x g t" . (lambda () (interactive) (git-timemachine) (global-display-line-numbers-mode t))))
+  ("C-x g t" . #'git-timemachine))
 
 (use-package diff-hl
   :after magit
@@ -216,7 +272,6 @@
         ("M-<return>" . #'copilot-accept-completion-by-word))
   :custom
   (copilot-max-char 1000000)
-  (copilot-clear-overlay-ignore-commands '(indent-for-tab-command))
   :config
   (add-to-list 'copilot-indentation-alist '(emacs-lisp-mode . 2)))
 
@@ -249,15 +304,19 @@
   :custom
   (corfu-cycle t)
   (corfu-preselect 'prompt)
-  :bind
-  (:map corfu-map)
   :init
   (global-corfu-mode))
+
+(use-package cape
+  :bind ("M-+" . cape-prefix-map)
+  :init
+  (add-hook 'completion-at-point-functions #'cape-dabbrev)
+  (add-hook 'completion-at-point-functions #'cape-file)
+  (add-hook 'completion-at-point-functions #'cape-elisp-block))
 
 (use-package orderless
   :custom
   (completion-styles '(orderless basic))
-  ;; (completion-category-overrides '((file (styles partial-completion))))
   (completion-category-overrides nil)
   (completion-category-defaults nil)
   (completion-pcm-leading-wildcard t))
@@ -333,10 +392,16 @@
   (buffer-regex-search
    "package\\s-+\\([a-zA-Z0-9_.]+\\)\\s-*;" 1))
 
-(defun which-java-class ()
-  "Get the current Java class name based on buffer content."
-  (buffer-regex-search
-   "class\\s-+\\([A-Za-z0-9_]+\\)" 1))
+(defun current-filename ()
+  (if (derived-mode-p 'dired-mode)
+      (dired-get-filename)
+    (buffer-file-name)))
+
+(defun which-java-class (&optional filename)
+  "Get the current Java class name based on file name"
+  (let ((filename (or filename (current-filename))))
+    (when (string-suffix-p ".java" filename)
+      (file-name-base filename))))
 
 (defun which-java-function ()
   "Get the current Java function name based on cursor position."
@@ -374,6 +439,14 @@
              (message "Not implemented yet.")))
     (message "No project found.")))
 
+(defun java-run-class ()
+  "Run java application for current class."
+  (interactive)
+  (let ((class-name (java-current-class-name)))
+    (if class-name
+        (java-run (format "compile exec:java -Dexec.mainClass=%s" class-name))
+      (message "Cannot determine class name"))))
+
 (defun java-test-package ()
   "Run java test for current package."
   (interactive)
@@ -408,6 +481,35 @@
   (interactive)
   (java-run "spring-boot:run"))
 
+(defun copy&replace-file (file replacements)
+  "Copy FILE, replace content and title based on REPLACEMENTS
+   and return the new file path."
+  (let* ((new-file file))
+    (dolist (pair replacements)
+      (setq new-file (replace-regexp-in-string
+                      (regexp-quote (car pair)) (cdr pair) new-file t t)))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (dolist (pair replacements)
+        (goto-char (point-min))
+        (while (search-forward (regexp-quote (car pair)) nil t)
+          (replace-match (cdr pair) t t)))
+      (write-region (point-min) (point-max) new-file nil 'silent))
+    new-file))
+
+(defun java-copy ()
+  "Copy current java file, replace package and class name, and open the new file."
+  (interactive)
+  (if-let* ((filename (current-filename))
+            (class (which-java-class filename))
+            (before (read-string "Replace: " class))
+            (after (read-string (format "Replace '%s' with: " before) before))
+            (replacements `((,before . ,after)))
+            (new-file (copy&replace-file filename replacements)))
+      (when (derived-mode-p 'dired-mode)
+        (revert-buffer))
+      (copy&replace-file filename `((,before . ,after)))))
+
 (use-package eglot-java
   :custom
   (eglot-java-java-program "/usr/lib/jvm/java-21-openjdk/bin/java")
@@ -421,6 +523,7 @@
         ("C-c C-x N" . #'eglot-java-project-new)
         ("C-c C-x t" . #'java-test)
         ("C-c C-x T" . #'eglot-java-project-build-task)
+        ("C-c C-x r" . #'java-run-class)
         ("C-c C-x R" . #'eglot-java-project-build-refresh)))
 
 (use-package eglot-java-lombok
@@ -439,4 +542,5 @@
   (cider-jack-in-default 'babashka)
   (cider-repl-display-help-banner nil)
   (cider-allow-jack-in-without-project t)
-  (cider-font-lock-dynamically '(macro core function var deprecated)))
+  (cider-font-lock-dynamically '(macro core function var deprecated))
+  (cider-repl-display-help-banner nil))
