@@ -369,7 +369,7 @@
     (:java
      (:format
       (:settings
-       (:url "https://raw.githubusercontent.com/google/styleguide/gh-pages/eclipse-java-google-style.xml")
+       (:url "https://gist.githubusercontent.com/rsooio/ce8695ae1c3959e3c7d562399b376ae5/raw/1bfb8e437d64f83e32530dcda3db0ecf3b188eae/eclipse-java-google-style.xml")
        :enabled t)))))
 
 (defun find-file-recursively-upward (filename &optional start-dir)
