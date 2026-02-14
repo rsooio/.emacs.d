@@ -72,7 +72,7 @@
 (use-package hideshow
   :delight
   :ensure nil
-  :hook (prog-mode . hs-minor-mode)
+  :hook (lisp-mode . hs-minor-mode)
   :bind
   (:map hs-minor-mode-map
         ("<backtab>" . #'hs-toggle-hiding)))
@@ -260,6 +260,10 @@
   :after magit
   :config (magit-todos-mode 1))
 
+(use-package magit-todos
+  :after magit
+  :config (magit-todos-mode 1))
+
 (use-package git-timemachine
   :bind
   ("C-x g t" . #'git-timemachine))
@@ -367,7 +371,7 @@
   (global-treesit-fold-indicators-mode t)
   :bind
   (:map treesit-fold-mode-map
-        ("C-c f" . #'treesit-fold-toggle)))
+        ("<backtab>" . #'treesit-fold-toggle)))
 
 (use-package eglot
   :commands eglot-ensure
@@ -435,6 +439,22 @@
     (when (and class-name package-name)
       (concat package-name "." class-name))))
 
+(defun named-compile (cmd &optional name)
+  "Run a compile command CMD with an optional NAME for the compilation buffer."
+  (let ((compilation-buffer-name-function
+         (lambda (mode)
+           (format "*%s: %s*" mode
+                   (or name (project-root (project-current)))))))
+    (compile cmd)))
+
+(defun maven-artifact-id (pom-path)
+  "Extract the artifactId from the nearest pom.xml file."
+  (let ((pom-path (or pom-path (find-file-recursively-upward "pom.xml"))))
+    (when pom-path
+      (with-temp-buffer
+        (insert-file-contents pom-path)
+        (buffer-regex-search "<artifactId>\\([^<]+\\)</artifactId>" 1)))))
+
 (defun java-run (cmd)
   "Run a Java command CMD in the context of the current project."
   (if-let* ((project (project-current))
@@ -445,13 +465,12 @@
                         "pom.xml"))))
       (cond ((string= cfg "pom.xml")
              (let ((mvn-cmd (if (file-exists-p (file-name-concat root "mvnw"))
-                               (file-name-concat root "mvnw")  "mvn"))
+                                (file-name-concat root "mvnw")  "mvn"))
                    (path (find-file-recursively-upward cfg))
-                   (compilation-buffer-name-function
-                    (or project-compilation-buffer-name-function
-                        compilation-buffer-name-function))
                    (default-directory root))
-               (compile (format "%s -f %s %s" mvn-cmd path cmd))))
+               (named-compile (format "%s -f %s %s" mvn-cmd path cmd)
+                              (format "%s(%s)" (maven-artifact-id path)
+                                      (car (split-string cmd " "))))))
             ((string= cfg "build.gradle")
              (message "Not implemented yet.")))
     (message "No project found.")))
