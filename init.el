@@ -40,13 +40,14 @@
   (fill-column 80)
   (compilation-scroll-output t)
   (compilation-max-output-line-length nil)
+  (flymake-mode-line-lighter nil)
   :bind
   ("C-x C-b" . #'ibuffer)
   :init
   (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
   (add-to-list 'initial-frame-alist '(fullscreen . maximized))
   (set-frame-font (format "JetBrainsMonoNerdFontMono %d"
-                          (/ (display-pixel-height) 80)))
+                          (/ (display-pixel-width) 140)))
   (dolist (charset '(kana han symbol cjk-misc bopomofo))
     (set-fontset-font (frame-parameter nil 'font) charset
                       (font-spec :family "Unifont")))
@@ -57,18 +58,34 @@
   (add-hook 'compilation-filter-hook 'ansi-color-compilation-filter)
   (setopt use-short-answers t))
 
-(use-package hs-minor-mode
+(use-package ls-lisp
   :ensure nil
-  :hook prog-mode
-  :bind
-  (:map hs-minor-mode-map
-        ("<backtab>" . #'hs-toggle-hiding)))
+  :custom
+  (ls-lisp-use-insert-directory-program nil)
+  (ls-lisp-dirs-first t))
 
 (use-package delight
   :delight
   (eldoc-mode))
 
+;; TODO: remove indicator in modeline
+(use-package hideshow
+  :delight
+  :ensure nil
+  :hook (prog-mode . hs-minor-mode)
+  :bind
+  (:map hs-minor-mode-map
+        ("<backtab>" . #'hs-toggle-hiding)))
+
+;; TODO: remove indicator in modeline
+(use-package cursor-undo
+  :delight cursor-undo
+  :config
+  (cursor-undo 1)
+  (disable-cursor-tracking move-beginning-of-line)
+  (disable-cursor-tracking move-end-of-line))
 (use-package paredit
+  :delight
   :hook (lisp-data-mode clojure-mode cider-repl-mode)
   :bind
   (:map paredit-mode-map
