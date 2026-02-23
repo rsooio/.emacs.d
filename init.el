@@ -404,10 +404,15 @@
     (when (re-search-forward regex nil t)
       (substring-no-properties (match-string (or num 0))))))
 
-(defun which-java-package ()
+(defun which-java-package (&optional filename)
   "Get the current Java package name based on buffer content."
-  (buffer-regex-search
-   "package\\s-+\\([a-zA-Z0-9_.]+\\)\\s-*;" 1))
+  (if filename
+      (with-temp-buffer
+        (insert-file-contents filename)
+        (buffer-regex-search
+         "package\\s-+\\([a-zA-Z0-9_.]+\\)\\s-*;" 1))
+    (buffer-regex-search
+     "package\\s-+\\([a-zA-Z0-9_.]+\\)\\s-*;" 1)))
 
 (defun current-filename ()
   (if (derived-mode-p 'dired-mode)
@@ -515,7 +520,7 @@
     new-file))
 
 (defun java-copy ()
-  "Copy current java file, replace package and class name, and open the new file."
+  "Copy current java file, replace package and class name."
   (interactive)
   (if-let* ((filename (current-filename))
             (class (which-java-class filename))
@@ -523,9 +528,54 @@
             (after (read-string (format "Replace '%s' with: " before) before))
             (replacements `((,before . ,after)))
             (new-file (copy&replace-file filename replacements)))
-      (when (derived-mode-p 'dired-mode)
-        (revert-buffer))
-      (copy&replace-file filename `((,before . ,after)))))
+      (progn
+        (when (derived-mode-p 'dired-mode)
+          (revert-buffer))
+        (copy&replace-file filename `((,before . ,after))))))
+
+(defun replace-file-content (file replacements)
+  "Replace content in FILE based on REPLACEMENTS."
+  (let ((buffer (find-file-noselect file)))
+    (with-current-buffer buffer
+      (let ((content (buffer-string)))
+        (dolist (pair replacements)
+          (setq content (replace-regexp-in-string
+                         (regexp-quote (car pair)) (cdr pair) content t t)))
+        (erase-buffer)
+        (insert content)))))
+
+(defun java-update-imports (old-package new-package)
+  "Update import statements in all java files from OLD-PACKAGE to NEW-PACKAGE."
+  ;; 1. 找到存在该包引用的文件
+  ;; 2. 替换 import 语句中的包名
+  (let* ((project (project-current))
+         (root (project-root project))
+         (java-files (directory-files-recursively root "\\.java\\'")))
+    (dolist (file java-files)
+      (with-temp-buffer
+        (insert-file-contents file)
+        (when (re-search-forward
+               (format "import\\s-+%s\\.[a-zA-Z0-9_.]+;" old-package) nil t)
+          (replace-file-content file `((,old-package . ,new-package))))))))
+
+(defun java-move ()
+  "Move current java file, auto correct package and class name."
+  (interactive)
+  (if-let* ((filename (current-filename))
+            (dir (file-name-directory filename))
+            (target (read-directory-name "Move to: "))
+            (package (which-java-package filename))
+            (package-path (string-replace "." "/" package))
+            (relative (file-name-directory (file-relative-name target dir)))
+            (new-package-path (-> (file-name-concat "/" package-path relative)
+                                  (expand-file-name)
+                                  (string-trim "/" "/")))
+            (new-package (string-replace "/" "." new-package-path)))
+      (progn
+        (rename-file filename target)
+        (replace-file-content target `((,package . ,new-package))
+        ;; TODO: update import statements in other files)
+        (message "Cannot determine filename or target")))))
 
 (use-package eglot-java
   :custom
