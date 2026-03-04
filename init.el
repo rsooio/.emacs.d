@@ -325,6 +325,10 @@
   :custom
   (corfu-cycle t)
   (corfu-preselect 'prompt)
+  :bind
+  (:map corfu-map
+        ("SPC" . #'corfu-insert-separator)
+        ("TAB" . #'corfu-complete))
   :init
   (global-corfu-mode))
 
