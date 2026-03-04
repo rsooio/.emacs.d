@@ -56,7 +56,8 @@
   (connection-local-set-profile-variables 'remote-direct-async-process
                                           '((tramp-direct-async-process . t)))
   (add-hook 'compilation-filter-hook 'ansi-color-compilation-filter)
-  (setopt use-short-answers t))
+  (setopt use-short-answers t)
+  (global-subword-mode t))
 
 (use-package ls-lisp
   :ensure nil
