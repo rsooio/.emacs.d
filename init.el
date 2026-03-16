@@ -41,6 +41,7 @@
   (compilation-scroll-output t)
   (compilation-max-output-line-length nil)
   (flymake-mode-line-lighter nil)
+  (css-indent-offset 2)
   :bind
   ("C-x C-b" . #'ibuffer)
   :init
@@ -53,6 +54,9 @@
                       (font-spec :family "Unifont")))
   (set-fontset-font (frame-parameter nil 'font) 'emoji
                     (font-spec :family "Symbola"))
+  (dolist (pitch '(fixed-pitch variable-pitch))
+    (set-face-attribute pitch nil :font (format "JetBrainsMonoNerdFontMono %d"
+                                               (/ (display-pixel-width) 140))))
   (connection-local-set-profile-variables 'remote-direct-async-process
                                           '((tramp-direct-async-process . t)))
   (add-hook 'compilation-filter-hook 'ansi-color-compilation-filter)
@@ -67,24 +71,35 @@
 
 (use-package delight
   :delight
-  (eldoc-mode))
+  (eldoc-mode)
+  (subword-mode)
+  (which-key-mode))
 
-;; TODO: remove indicator in modeline
 (use-package hideshow
-  :delight
+  :delight hs-minor-mode
   :ensure nil
   :hook (lisp-mode . hs-minor-mode)
   :bind
   (:map hs-minor-mode-map
         ("<backtab>" . #'hs-toggle-hiding)))
 
-;; TODO: remove indicator in modeline
 (use-package cursor-undo
-  :delight cursor-undo
+  :delight cundo-enable-cursor-tracking
   :config
   (cursor-undo 1)
   (disable-cursor-tracking move-beginning-of-line)
   (disable-cursor-tracking move-end-of-line))
+
+;; TODO: make emms work
+(use-package emms
+  :custom
+  (emms-source-file-default-directory "~/music")
+  (emms-player-list '(emms-player-mpv))
+  (emms-player-mpv-parameters '("--no-terminal" "--force-window=no" "--quiet"))
+  (emms-info-functions '(emms-info-exiftool emms-info-native))
+  :config
+  (emms-all))
+
 (use-package paredit
   :delight
   :hook (lisp-data-mode clojure-mode cider-repl-mode)
@@ -248,26 +263,11 @@
   :custom
   (magit-display-buffer-function
    #'magit-display-buffer-same-window-except-diff-v1)
-  :bind
-  ("C-x g g" . #'magit-status)
-  ("C-x g b" . #'magit-blame-addition)
-  ;; TODO: add margin settings in magit log "Other" section use shortcut "S"
-  ;; :config
-  ;; (transient-append-suffix 'magit-log "b"
-  ;;   '("F" "Margin Settings" magit-margin-settings))
-)
+  (magit-define-global-key-bindings 'recommended))
 
 (use-package magit-todos
   :after magit
   :config (magit-todos-mode 1))
-
-(use-package magit-todos
-  :after magit
-  :config (magit-todos-mode 1))
-
-(use-package git-timemachine
-  :bind
-  ("C-x g t" . #'git-timemachine))
 
 (use-package diff-hl
   :after magit
@@ -297,30 +297,9 @@
   :config
   (add-to-list 'copilot-indentation-alist '(emacs-lisp-mode . 2)))
 
-(use-package ai-code
+(use-package eca
   :custom
-  (global-auto-revert-mode t)
-  (auto-revert-interval 1)
-  (ai-code-backends-infra-terminal-backend 'eat)
-  :bind
-  ("C-c C-a" . #'ai-code-menu)
-  :config
-  (ai-code-set-backend 'github-copilot-cli)
-  (with-eval-after-load 'magit
-    (transient-append-suffix 'magit-diff "r" ; "Extra" group
-      '("A" "AI Code: Review/generate diff" ai-code-pull-or-review-diff-file))
-    (transient-append-suffix 'magit-blame "b" ; "Extra" group
-      '("A" "AI Code: Analyze blame" ai-code-magit-blame-analyze))
-    (transient-append-suffix 'magit-log "b" ; "Extra" group
-      '("A" "AI Code: Analyze log" ai-code-magit-log-analyze)))
-  (advice-remove 'ai-code-backends-infra--create-terminal-session
-                 #'ai-code-backends-infra--create-terminal-session--filter)
-  (advice-add 'ai-code-backends-infra--create-terminal-session
-              :filter-args #'ai-code-backends-infra--create-terminal-session--filter))
-
-(defun ai-code-backends-infra--create-terminal-session--filter (args)
-  "Advice function to filter and modify the arguments for creating a terminal session."
-  (setf (nth 2 args) (string-trim (nth 2 args))) args)
+  (eca-chat-window-width 0.5))
 
 (use-package corfu
   :custom
@@ -372,15 +351,84 @@
 (use-package treesit-fold
   :delight
   :after treesit-auto
-  :custom
-  (global-treesit-fold-indicators-mode t)
   :bind
   (:map treesit-fold-mode-map
         ("<backtab>" . #'treesit-fold-toggle)))
 
+(defun eglot-project-find-function (dir)
+  "https://github.com/joaotavora/eglot/discussions/1337"
+  (when eglot-lsp-context
+    (let* ((marker nil)
+           (root (locate-dominating-file
+                  dir
+                  (lambda (d)
+                    (cl-loop for f in '("package.json" "pom.xml")
+                             when (file-exists-p (expand-file-name f d))
+			                 do (setq marker f)
+                             and return t)))))
+      (when root
+        `(eglot--project ,root :marker ,marker)))))
+
+(defun es/list-scripts (file)
+  "List scripts from package.json CONFIG."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (let* ((json-object-type 'hash-table)
+           (json-array-type 'list)
+           (json-key-type 'string)
+           (data (json-read)))
+      (hash-table-keys (gethash "scripts" data)))))
+
+(defun es/package-manager (file)
+  "Determine package manager based on lock files."
+  (let ((dir (file-name-directory file)))
+    (cond ((file-exists-p (expand-file-name "bun.lock" dir)) "bun")
+          ((file-exists-p (expand-file-name "bun.lockb" dir)) "bun")
+          ((file-exists-p (expand-file-name "pnpm-lock.yaml" dir)) "pnpm")
+          ((file-exists-p (expand-file-name "yarn.lock" dir)) "yarn")
+          ((file-exists-p (expand-file-name "package-lock.json" dir)) "npm")
+          ((file-name-parent-directory dir) (es/package-manager
+                                             (file-name-parent-directory dir)))
+          (t "npm"))))
+
+(defun eglot-project-boot/es (config)
+  (when-let* ((scripts (es/list-scripts config))
+              (manager (es/package-manager config))
+              (prefix (concat manager " run "))
+              (script (completing-read prefix scripts))
+              (default-directory (file-name-directory config)))
+    (named-compile (concat prefix script) (format "%s(%s)" manager script))))
+
+(defun maven/command (config)
+  (let* ((wrapper-dir (locate-dominating-file config "mvnw")))
+    (if wrapper-dir
+        (file-name-concat wrapper-dir "mvnw")
+      "mvn")))
+
+(defun maven/artifact-id (config)
+  (with-temp-buffer
+    (insert-file-contents config)
+    (buffer-regex-search "<artifactId>\\([^<]+\\)</artifactId>" 1)))
+
+(defun eglot-project-boot/maven (config)
+  (let* ((prefix (concat (maven/command config) " "))
+         (goal (completing-read prefix '("spring-boot:run")))
+         (artifact-id (maven/artifact-id config))
+         (default-directory (file-name-directory config)))
+    (named-compile (concat prefix goal) (format "%s(%s)" artifact-id goal))))
+
+(defun eglot-project-boot ()
+  (interactive)
+  (when-let* ((project (eglot--current-project))
+              (marker (plist-get project :marker))
+              (root (cadr project))
+              (config (file-name-concat root marker)))
+    (pcase marker
+      ("package.json" (eglot-project-boot/es config))
+      ("pom.xml" (eglot-project-boot/maven config)))))
+
 (use-package eglot
-  :commands eglot-ensure
-  :hook (typescript-mode tsx-mode go-mode)
+  :hook ((typescript-ts-mode tsx-ts-mode go-ts-mode) . eglot-ensure)
   :bind
   (:map eglot-mode-map
         ("C-c l r" . #'eglot-rename)
@@ -388,7 +436,15 @@
         ("C-c l f" . #'eglot-format)
         ("C-c l h" . #'eglot-help-at-point)
         ("C-c l s" . #'eglot-shutdown)
-        ("C-c l i" . #'eglot-find-implementation)))
+        ("C-c l i" . #'eglot-find-implementation)
+        ("C-c C-x x" . #'eglot-project-boot))
+  :config
+  (add-to-list 'project-find-functions #'eglot-project-find-function)
+  (add-to-list 'eglot-server-programs
+               `((typescript-ts-mode tsx-ts-mode)
+                 . ("rass"
+                    "--" "typescript-language-server" "--stdio"
+                    "--" "biome" "lsp-proxy"))))
 
 (defun custom-eglot-java-init-opts (server eglot-java-eclipse-jdt)
   '(:settings
