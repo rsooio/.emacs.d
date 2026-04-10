@@ -1,7 +1,7 @@
 ;; -*- lexical-binding: t; coding: utf-8 -*-
 
 (use-package emacs
-  :ensure t ; ensure use-package-ensure is loaded
+  :ensure t ;; ensure use-package-ensure is loaded
   :hook
   ((prog-mode . display-fill-column-indicator-mode)
    (before-save . delete-trailing-whitespace))
@@ -56,7 +56,7 @@
                     (font-spec :family "Symbola"))
   (dolist (pitch '(fixed-pitch variable-pitch))
     (set-face-attribute pitch nil :font (format "JetBrainsMonoNerdFontMono %d"
-                                               (/ (display-pixel-width) 140))))
+                                                (/ (display-pixel-width) 140))))
   (connection-local-set-profile-variables 'remote-direct-async-process
                                           '((tramp-direct-async-process . t)))
   (add-hook 'compilation-filter-hook 'ansi-color-compilation-filter)
@@ -297,18 +297,15 @@
   :config
   (add-to-list 'copilot-indentation-alist '(emacs-lisp-mode . 2)))
 
-(use-package eca
-  :custom
-  (eca-chat-window-width 0.5))
-
 (use-package corfu
   :custom
   (corfu-cycle t)
   (corfu-preselect 'prompt)
   :bind
   (:map corfu-map
-        ("SPC" . #'corfu-insert-separator)
-        ("TAB" . #'corfu-complete))
+        ("M-RET" . nil)
+        ("M-<return>" . nil)
+        ("SPC" . nil))
   :init
   (global-corfu-mode))
 
@@ -325,6 +322,24 @@
   (completion-category-overrides nil)
   (completion-category-defaults nil)
   (completion-pcm-leading-wildcard t))
+
+(use-package fussy
+  :config
+  (fussy-setup)
+  (fussy-eglot-setup)
+  (advice-add 'corfu--capf-wrapper :before 'fussy-wipe-cache)
+  (add-hook 'corfu-mode-hook
+            (lambda ()
+              (setq-local fussy-max-candidate-limit 5000
+                          fussy-default-regex-fn 'fussy-pattern-first-letter
+                          fussy-prefer-prefix nil))))
+
+(use-package fzf-native
+  :vc (:url "https://github.com/dangduc/fzf-native" :rev :newest)
+  :custom
+  (fussy-score-fn 'fussy-fzf-native-score)
+  :config
+  (fzf-native-load-dyn))
 
 (use-package vertico
   :custom
@@ -355,20 +370,6 @@
   (:map treesit-fold-mode-map
         ("<backtab>" . #'treesit-fold-toggle)))
 
-(defun eglot-project-find-function (dir)
-  "https://github.com/joaotavora/eglot/discussions/1337"
-  (when eglot-lsp-context
-    (let* ((marker nil)
-           (root (locate-dominating-file
-                  dir
-                  (lambda (d)
-                    (cl-loop for f in '("package.json" "pom.xml")
-                             when (file-exists-p (expand-file-name f d))
-			                 do (setq marker f)
-                             and return t)))))
-      (when root
-        `(eglot--project ,root :marker ,marker)))))
-
 (defun es/list-scripts (file)
   "List scripts from package.json CONFIG."
   (with-temp-buffer
@@ -378,6 +379,11 @@
            (json-key-type 'string)
            (data (json-read)))
       (hash-table-keys (gethash "scripts" data)))))
+
+(defun es/config-file ()
+  "Find the nearest package.json file."
+  (concat (locate-dominating-file default-directory "package.json")
+          "package.json"))
 
 (defun es/package-manager (file)
   "Determine package manager based on lock files."
@@ -391,15 +397,21 @@
                                              (file-name-parent-directory dir)))
           (t "npm"))))
 
-(defun eglot-project-boot/es (config)
-  (when-let* ((scripts (es/list-scripts config))
+(defun eglot-project-boot/es ()
+  (when-let* ((config (es/config-file))
+              (scripts (es/list-scripts config))
               (manager (es/package-manager config))
               (prefix (concat manager " run "))
               (script (completing-read prefix scripts))
               (default-directory (file-name-directory config)))
     (named-compile (concat prefix script) (format "%s(%s)" manager script))))
 
+(defun maven/config-file ()
+  "Find the nearest pom.xml file."
+  (concat (locate-dominating-file default-directory "pom.xml") "pom.xml"))
+
 (defun maven/command (config)
+  ;; TODO: find root using pom.xml instead of recursive search
   (let* ((wrapper-dir (locate-dominating-file config "mvnw")))
     (if wrapper-dir
         (file-name-concat wrapper-dir "mvnw")
@@ -410,22 +422,49 @@
     (insert-file-contents config)
     (buffer-regex-search "<artifactId>\\([^<]+\\)</artifactId>" 1)))
 
-(defun eglot-project-boot/maven (config)
-  (let* ((prefix (concat (maven/command config) " "))
-         (goal (completing-read prefix '("spring-boot:run")))
+(defun eglot-project-boot/maven ()
+  (let* ((config (maven/config-file))
+         (prefix (concat (maven/command config) " "))
+         (default-directory (file-name-directory config))
          (artifact-id (maven/artifact-id config))
-         (default-directory (file-name-directory config)))
+         (goal (completing-read (format "(%s) %s" artifact-id prefix)
+                                '("spring-boot:run" "jib:build"))))
     (named-compile (concat prefix goal) (format "%s(%s)" artifact-id goal))))
+
+(defun go/config-file ()
+  "Find the nearest go.mod file."
+  (concat (locate-dominating-file default-directory "go.mod") "go.mod"))
+
+(defun eglot-project-boot/go ()
+  (named-compile "go run ." "go(run)"))
+
+(defun eglot-project-type ()
+  (let ((root (project-root (project-current))))
+    (cond ((file-exists-p (file-name-concat root "package.json")) 'es)
+          ((file-exists-p (file-name-concat root "go.mod")) 'go)
+          ((file-exists-p (file-name-concat root "pom.xml")) 'maven))))
 
 (defun eglot-project-boot ()
   (interactive)
-  (when-let* ((project (eglot--current-project))
-              (marker (plist-get project :marker))
-              (root (cadr project))
-              (config (file-name-concat root marker)))
-    (pcase marker
-      ("package.json" (eglot-project-boot/es config))
-      ("pom.xml" (eglot-project-boot/maven config)))))
+  (pcase (eglot-project-type)
+    ('es    (eglot-project-boot/es))
+    ('maven (eglot-project-boot/maven))
+    ('go    (eglot-project-boot/go))))
+
+(defun eglot-project-find-function (dir)
+  "https://github.com/joaotavora/eglot/discussions/1337"
+  ;; TODO: split lsp root and project root
+  (when eglot-lsp-context
+    (let* ((marker nil)
+           (root (locate-dominating-file
+                  dir
+                  (lambda (d)
+                    (cl-loop for f in '("package.json")
+                             when (file-exists-p (expand-file-name f d))
+			                 do (setq marker f)
+                             and return t)))))
+      (when root
+        `(eglot--project ,root :marker ,marker)))))
 
 (use-package eglot
   :hook ((typescript-ts-mode tsx-ts-mode go-ts-mode) . eglot-ensure)
@@ -437,14 +476,18 @@
         ("C-c l h" . #'eglot-help-at-point)
         ("C-c l s" . #'eglot-shutdown)
         ("C-c l i" . #'eglot-find-implementation)
-        ("C-c C-x x" . #'eglot-project-boot))
+        ("C-c x" . #'eglot-project-boot))
   :config
   (add-to-list 'project-find-functions #'eglot-project-find-function)
   (add-to-list 'eglot-server-programs
                `((typescript-ts-mode tsx-ts-mode)
                  . ("rass"
                     "--" "typescript-language-server" "--stdio"
-                    "--" "biome" "lsp-proxy"))))
+                    "--" "biome" "lsp-proxy")))
+  (add-hook 'eglot-managed-mode-hook
+            (lambda ()
+              (add-hook 'completion-at-point-functions
+                        #'eglot-completion-at-point))))
 
 (defun custom-eglot-java-init-opts (server eglot-java-eclipse-jdt)
   '(:settings
@@ -596,6 +639,7 @@
 
 (defun java-copy ()
   "Copy current java file, replace package and class name, and open the new file."
+  ;; TODO: dired copy first then replace content, let cursor stay in the new file
   (interactive)
   (if-let* ((filename (current-filename))
             (class (which-java-class filename))
@@ -625,8 +669,7 @@
 
 (use-package eglot-java-lombok
   :after eglot-java
-  :vc (:url "https://github.com/ltylty/eglot-java-lombok"
-            :rev :newest)
+  :vc (:url "https://github.com/ltylty/eglot-java-lombok" :rev :newest)
   :config
   (eglot-java-lombok/init))
 
