@@ -6,6 +6,7 @@
   ((prog-mode . display-fill-column-indicator-mode)
    (before-save . delete-trailing-whitespace))
   :custom
+  (epg-pinentry-mode 'loopback)
   ;; install ttf-symbola for emojis
   (face-font-rescale-alist '(("Unifont" . 1.2) ("Symbola" . 1.3)))
   (custom-file (locate-user-emacs-file "custom.el"))
@@ -62,6 +63,11 @@
   (add-hook 'compilation-filter-hook 'ansi-color-compilation-filter)
   (setopt use-short-answers t)
   (global-subword-mode t))
+
+(use-package keyfreq
+  :config
+  (keyfreq-mode 1)
+  (keyfreq-autosave-mode 1))
 
 (use-package ls-lisp
   :ensure nil
@@ -301,6 +307,7 @@
   :custom
   (corfu-cycle t)
   (corfu-preselect 'prompt)
+  (corfu-preview-current 'insert)
   :bind
   (:map corfu-map
         ("M-RET" . nil)
@@ -316,30 +323,16 @@
   (add-hook 'completion-at-point-functions #'cape-file)
   (add-hook 'completion-at-point-functions #'cape-elisp-block))
 
+(use-package yasnippet
+  :config
+  (yas-global-mode 1))
+
 (use-package orderless
   :custom
   (completion-styles '(orderless basic))
   (completion-category-overrides nil)
   (completion-category-defaults nil)
   (completion-pcm-leading-wildcard t))
-
-(use-package fussy
-  :config
-  (fussy-setup)
-  (fussy-eglot-setup)
-  (advice-add 'corfu--capf-wrapper :before 'fussy-wipe-cache)
-  (add-hook 'corfu-mode-hook
-            (lambda ()
-              (setq-local fussy-max-candidate-limit 5000
-                          fussy-default-regex-fn 'fussy-pattern-first-letter
-                          fussy-prefer-prefix nil))))
-
-(use-package fzf-native
-  :vc (:url "https://github.com/dangduc/fzf-native" :rev :newest)
-  :custom
-  (fussy-score-fn 'fussy-fzf-native-score)
-  :config
-  (fzf-native-load-dyn))
 
 (use-package vertico
   :custom
@@ -468,6 +461,8 @@
 
 (use-package eglot
   :hook ((typescript-ts-mode tsx-ts-mode go-ts-mode) . eglot-ensure)
+  :custom
+  (eglot-send-changes-idle-time 0.1)
   :bind
   (:map eglot-mode-map
         ("C-c l r" . #'eglot-rename)
@@ -479,11 +474,6 @@
         ("C-c x" . #'eglot-project-boot))
   :config
   (add-to-list 'project-find-functions #'eglot-project-find-function)
-  (add-to-list 'eglot-server-programs
-               `((typescript-ts-mode tsx-ts-mode)
-                 . ("rass"
-                    "--" "typescript-language-server" "--stdio"
-                    "--" "biome" "lsp-proxy")))
   (add-hook 'eglot-managed-mode-hook
             (lambda ()
               (add-hook 'completion-at-point-functions
@@ -684,3 +674,7 @@
   (cider-allow-jack-in-without-project t)
   (cider-font-lock-dynamically '(macro core function var deprecated))
   (cider-repl-display-help-banner nil))
+
+(use-package markdown-mode
+  :bind (:map markdown-mode-map
+              ("C-c C-e" . markdown-do)))
