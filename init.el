@@ -41,6 +41,7 @@
   (fill-column 80)
   (compilation-scroll-output t)
   (compilation-max-output-line-length nil)
+  (compilation-environment '("TERM=dumb" "CI=1"))
   (flymake-mode-line-lighter nil)
   (css-indent-offset 2)
   :bind
