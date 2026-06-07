@@ -119,7 +119,8 @@
         ("]" . #'paredit-close-square)
         ("}" . #'paredit-close-curly)
         ("M-[" . #'paredit-wrap-square)
-        ("M-{" . #'paredit-wrap-curly)))
+        ("M-{" . #'paredit-wrap-curly)
+        ("M-?" . nil)))
 
 (defun default-project-function-no-tramp (may-prompt)
   "Project function that ignores remote projects."
