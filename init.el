@@ -271,6 +271,20 @@
    #'magit-display-buffer-same-window-except-diff-v1)
   (magit-define-global-key-bindings 'recommended))
 
+(use-package magit-gptcommit
+  :after magit
+  :demand t
+  :custom
+  (magit-gptcommit-llm-provider (make-llm-openai-compatible
+                                 :url "https://api.deepseek.com"
+                                 :key (getenv "DEEPSEEK_API_KEY")
+                                 :chat-model "deepseek-v4-pro"))
+  :init
+  (require 'llm-openai)
+  :config
+  (magit-gptcommit-mode 1)
+  (magit-gptcommit-status-buffer-setup))
+
 (use-package magit-todos
   :after magit
   :config (magit-todos-mode 1))
