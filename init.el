@@ -71,6 +71,10 @@
   (keyfreq-mode 1)
   (keyfreq-autosave-mode 1))
 
+(use-package time-tracker
+  :vc (:url "https://github.com/rsooio/time-tracker.el")
+  :config (time-tracker-mode 1))
+
 (use-package ls-lisp
   :ensure nil
   :custom
