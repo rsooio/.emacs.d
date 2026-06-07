@@ -284,7 +284,6 @@
   :init
   (require 'llm-openai)
   :config
-  (magit-gptcommit-mode 1)
   (magit-gptcommit-status-buffer-setup))
 
 (use-package magit-todos
