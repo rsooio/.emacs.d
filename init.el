@@ -339,6 +339,7 @@
   (add-hook 'completion-at-point-functions #'cape-elisp-block))
 
 (use-package yasnippet
+  :delight yas-minor-mode
   :config
   (yas-global-mode 1))
 
