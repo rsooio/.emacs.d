@@ -1,5 +1,18 @@
 ;; -*- lexical-binding: t; coding: utf-8 -*-
 
+(defvar font-size (/ (display-pixel-width) 140))
+
+(defun init-fonts (font-size)
+  (set-frame-font (format "JetBrainsMonoNerdFontMono %d" font-size))
+  (dolist (charset '(kana han symbol cjk-misc bopomofo))
+    (set-fontset-font (frame-parameter nil 'font) charset
+                      (font-spec :family "Unifont")))
+  (set-fontset-font (frame-parameter nil 'font) 'emoji
+                    (font-spec :family "Symbola"))
+  (dolist (pitch '(fixed-pitch variable-pitch))
+    (set-face-attribute pitch nil :font (format "JetBrainsMonoNerdFontMono %d"
+                                                font-size))))
+
 (use-package emacs
   :ensure t ;; ensure use-package-ensure is loaded
   :hook
@@ -50,16 +63,7 @@
   :init
   (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
   (add-to-list 'initial-frame-alist '(fullscreen . maximized))
-  (set-frame-font (format "JetBrainsMonoNerdFontMono %d"
-                          (/ (display-pixel-width) 140)))
-  (dolist (charset '(kana han symbol cjk-misc bopomofo))
-    (set-fontset-font (frame-parameter nil 'font) charset
-                      (font-spec :family "Unifont")))
-  (set-fontset-font (frame-parameter nil 'font) 'emoji
-                    (font-spec :family "Symbola"))
-  (dolist (pitch '(fixed-pitch variable-pitch))
-    (set-face-attribute pitch nil :font (format "JetBrainsMonoNerdFontMono %d"
-                                                (/ (display-pixel-width) 140))))
+  (init-fonts font-size)
   (connection-local-set-profile-variables 'remote-direct-async-process
                                           '((tramp-direct-async-process . t)))
   (add-hook 'compilation-filter-hook 'ansi-color-compilation-filter)
