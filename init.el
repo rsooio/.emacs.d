@@ -57,6 +57,7 @@
   (compilation-environment '("TERM=dumb" "CI=1"))
   (flymake-mode-line-lighter nil)
   (css-indent-offset 2)
+  (js-indent-level 2)
   (set-face-background 'error "#ffdddd")
   :bind
   ("C-x C-b" . #'ibuffer)
