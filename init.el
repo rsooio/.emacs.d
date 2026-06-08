@@ -398,6 +398,16 @@
            (data (json-read)))
       (hash-table-keys (gethash "scripts" data)))))
 
+(defun es/get-name (file)
+  "Get project name from package.json CONFIG."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (let* ((json-object-type 'hash-table)
+           (json-array-type 'list)
+           (json-key-type 'string)
+           (data (json-read)))
+      (gethash "name" data))))
+
 (defun es/config-file ()
   "Find the nearest package.json file."
   (concat (locate-dominating-file default-directory "package.json")
@@ -418,11 +428,12 @@
 (defun eglot-project-boot/es ()
   (when-let* ((config (es/config-file))
               (scripts (es/list-scripts config))
+              (name (es/get-name config))
               (manager (es/package-manager config))
               (prefix (concat manager " run "))
               (script (completing-read prefix scripts))
               (default-directory (file-name-directory config)))
-    (named-compile (concat prefix script) (format "%s(%s)" manager script))))
+    (named-compile (concat prefix script) (format "%s(%s)" name script))))
 
 (defun maven/config-file ()
   "Find the nearest pom.xml file."
