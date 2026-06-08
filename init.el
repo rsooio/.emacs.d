@@ -478,7 +478,8 @@
   (pcase (eglot-project-type)
     ('es    (eglot-project-boot/es))
     ('maven (eglot-project-boot/maven))
-    ('go    (eglot-project-boot/go))))
+    ('go    (eglot-project-boot/go))
+    (_      (message "Unknown project type"))))
 
 (defun eglot-project-find-function (dir)
   "https://github.com/joaotavora/eglot/discussions/1337"
