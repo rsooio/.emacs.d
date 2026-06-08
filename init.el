@@ -85,6 +85,18 @@
   (ls-lisp-use-insert-directory-program nil)
   (ls-lisp-dirs-first t))
 
+(use-package wgrep
+  :custom
+  (wgrep-auto-save-buffer t)
+  :bind
+  (:map grep-mode-map
+        ("C-x C-q" . #'wgrep-change-to-wgrep-mode))
+  (:map wgrep-mode-map
+        ("C-x C-s" . nil)
+        ("C-c C-e" . nil)
+        ("C-c C-c" . #'wgrep-finish-edit)
+        ("C-c C-k" . #'wgrep-abort-changes)))
+
 (use-package delight
   :delight
   (eldoc-mode)
