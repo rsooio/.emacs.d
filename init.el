@@ -315,7 +315,7 @@
 
 (use-package copilot
   :delight
-  :hook prog-mode
+  :hook (prog-mode git-commit-mode)
   :bind
   (:map copilot-completion-map
         ("C-RET" . #'copilot-accept-completion)
