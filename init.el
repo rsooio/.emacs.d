@@ -156,13 +156,6 @@
    :map minibuffer-local-map
    ("C-r" . #'consult-history)))
 
-(use-package multiple-cursors
-  :bind
-  (("C-c m c" . #'mc/edit-lines)
-   ("C-c m n" . #'mc/mark-next-like-this)
-   ("C-c m p" . #'mc/mark-previous-like-this)
-   ("C-c m a" . #'mc/mark-all-like-this)))
-
 (use-package vundo
   :bind
   ("C-x u" . #'vundo))
@@ -197,8 +190,6 @@
   ("C-c C-l" . #'org-store-link)
   ("C-c a" . #'org-agenda)
   ("C-c c" . #'org-capture))
-
-(use-package eat)
 
 (defun consult-project-ripgrep ()
   (interactive)
