@@ -287,6 +287,70 @@
   :config
   (magit-gptcommit-status-buffer-setup))
 
+(defun magit-git-global-config (key value)
+  "Set or remove a Git -c option in `magit-git-global-arguments'.
+
+KEY is the Git configuration name, e.g. \"core.fsmonitor\".
+
+If VALUE is non-nil, ensure the pair
+
+  -c KEY=VALUE
+
+exists exactly once and is appended to the end of
+`magit-git-global-arguments'.
+
+If VALUE is nil, remove any existing
+
+  -c KEY=...
+
+entry from `magit-git-global-arguments'.
+
+Examples:
+
+  ;; Add/update:
+  (magit-git-global-config
+   \"core.fsmonitor\" \"true\")
+
+  ;; Remove:
+  (magit-git-global-config
+   \"core.fsmonitor\" nil)"
+  (let ((args magit-git-global-arguments)
+        result)
+    ;; Remove all existing -c KEY=... pairs.
+    (while args
+      (if (and (equal (car args) "-c")
+               (cadr args)
+               (string-prefix-p
+                (concat key "=")
+                (cadr args)))
+          (setq args (cddr args))
+        (push (car args) result)
+        (setq args (cdr args))))
+
+    (setq magit-git-global-arguments (nreverse result))
+
+    ;; Append new value at the end if requested.
+    (when value
+      (setq magit-git-global-arguments
+            (append magit-git-global-arguments
+                    (list "-c"
+                          (format "%s=%s" key value)))))))
+
+(defvar magit-git-user-presets
+  '(("default" . ())
+    ("rs" . ("rs" "git@rsoo.io" "true"))
+    ("claude" . ("Claude Code" "noreply@anthropic.com" "false"))))
+
+(defun magit-git-switch-user ()
+  "Switch Git user by selecting from `magit-git-user-presets`."
+  (interactive)
+  (let* ((preset (completing-read "Select Git user preset: "
+                                  (mapcar #'car magit-git-user-presets) nil t))
+         (config (assoc preset magit-git-user-presets)))
+    (magit-git-global-config "user.name" (nth 1 config))
+    (magit-git-global-config "user.email" (nth 2 config))
+    (magit-git-global-config "commit.gpgsign" (nth 3 config))))
+
 (use-package magit-todos
   :after magit
   :config (magit-todos-mode 1))
