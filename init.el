@@ -271,7 +271,8 @@
   :custom
   (magit-display-buffer-function
    #'magit-display-buffer-same-window-except-diff-v1)
-  (magit-define-global-key-bindings 'recommended))
+  (magit-define-global-key-bindings 'recommended)
+  (transient-default-level 5))
 
 (use-package magit-gptcommit
   :after magit
