@@ -703,3 +703,12 @@
 (use-package markdown-mode
   :bind (:map markdown-mode-map
               ("C-c C-e" . markdown-do)))
+
+(defun vsplit (arg)
+  "Split the current window into vertical windows."
+  (interactive "p")
+  (delete-other-windows)
+  (dotimes (i (1- arg))
+    (split-window-right))
+  (balance-windows)
+  (init-fonts (* font-size (min 1 (/ 2.0 arg)))))
