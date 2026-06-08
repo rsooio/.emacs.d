@@ -94,7 +94,7 @@
 (use-package hideshow
   :delight hs-minor-mode
   :ensure nil
-  :hook (lisp-mode . hs-minor-mode)
+  :hook ((emacs-lisp-mode) . hs-minor-mode)
   :bind
   (:map hs-minor-mode-map
         ("<backtab>" . #'hs-toggle-hiding)))
