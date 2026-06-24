@@ -367,7 +367,8 @@ Examples:
          (config (assoc preset magit-git-user-presets)))
     (magit-git-global-config "user.name" (nth 1 config))
     (magit-git-global-config "user.email" (nth 2 config))
-    (magit-git-global-config "commit.gpgsign" (nth 3 config))))
+    (magit-git-global-config "commit.gpgsign" (nth 3 config))
+    (magit-git-global-config "tag.gpgsign" (nth 3 config))))
 
 (use-package magit-todos
   :after magit
