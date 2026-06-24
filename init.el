@@ -86,6 +86,11 @@
   (ls-lisp-use-insert-directory-program nil)
   (ls-lisp-dirs-first t))
 
+(use-package grep
+  :ensure nil
+  :config
+  (add-to-list 'grep-find-ignored-directories "node_modules"))
+
 (use-package wgrep
   :custom
   (wgrep-auto-save-buffer t)
