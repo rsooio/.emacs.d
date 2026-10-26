@@ -3,15 +3,15 @@
 (defvar font-size (/ (display-pixel-width) 140))
 
 (defun init-fonts (font-size)
-  (set-frame-font (format "JetBrainsMonoNerdFontMono %d" font-size))
-  (dolist (charset '(kana han symbol cjk-misc bopomofo))
-    (set-fontset-font (frame-parameter nil 'font) charset
-                      (font-spec :family "Unifont")))
-  (set-fontset-font (frame-parameter nil 'font) 'emoji
-                    (font-spec :family "Symbola"))
-  (dolist (pitch '(fixed-pitch variable-pitch))
-    (set-face-attribute pitch nil :font (format "JetBrainsMonoNerdFontMono %d"
-                                                font-size))))
+  (let ((font (format "JetBrainsMono %d" font-size)))
+    (set-frame-font font)
+    (dolist (charset '(kana han symbol cjk-misc bopomofo))
+      (set-fontset-font (frame-parameter nil 'font) charset
+                        (font-spec :family "Unifont")))
+    (set-fontset-font (frame-parameter nil 'font) 'emoji
+                      (font-spec :family "Symbola"))
+    (dolist (pitch '(fixed-pitch variable-pitch))
+      (set-face-attribute pitch nil :font font))))
 
 (use-package emacs
   :ensure t ;; ensure use-package-ensure is loaded
@@ -112,7 +112,9 @@
 (use-package hideshow
   :delight hs-minor-mode
   :ensure nil
-  :hook ((emacs-lisp-mode) . hs-minor-mode)
+  :hook (prog-mode . hs-minor-mode)
+  :custom
+  (hs-allow-nesting t)
   :bind
   (:map hs-minor-mode-map
         ("<backtab>" . #'hs-toggle-hiding)))
@@ -123,16 +125,6 @@
   (cursor-undo 1)
   (disable-cursor-tracking move-beginning-of-line)
   (disable-cursor-tracking move-end-of-line))
-
-;; TODO: make emms work
-(use-package emms
-  :custom
-  (emms-source-file-default-directory "~/music")
-  (emms-player-list '(emms-player-mpv))
-  (emms-player-mpv-parameters '("--no-terminal" "--force-window=no" "--quiet"))
-  (emms-info-functions '(emms-info-exiftool emms-info-native))
-  :config
-  (emms-all))
 
 (use-package paredit
   :delight
@@ -147,6 +139,11 @@
         ("M-[" . #'paredit-wrap-square)
         ("M-{" . #'paredit-wrap-curly)
         ("M-?" . nil)))
+
+(use-package domedit
+  :vc (:url "https://github.com/rsooio/domedit")
+  :hook ((html-ts-mode . domedit-mode)
+         (tsx-ts-mode . domedit-mode)))
 
 (defun default-project-function-no-tramp (may-prompt)
   "Project function that ignores remote projects."
@@ -299,7 +296,7 @@
   (magit-gptcommit-llm-provider (make-llm-openai-compatible
                                  :url "https://api.deepseek.com"
                                  :key (getenv "DEEPSEEK_API_KEY")
-                                 :chat-model "deepseek-v4-pro"))
+                                 :chat-model "deepseek-flash"))
   :init
   (require 'llm-openai)
   :config
@@ -393,6 +390,8 @@ Examples:
   :hook (prog-mode git-commit-mode)
   :bind
   (:map copilot-completion-map
+        ("<tab>" . nil)
+        ("TAB" . nil)
         ("C-RET" . #'copilot-accept-completion)
         ("C-<return>" . #'copilot-accept-completion)
         ("M-RET" . #'copilot-accept-completion-by-word)
@@ -453,13 +452,6 @@ Examples:
   :config
   (treesit-auto-add-to-auto-mode-alist 'all)
   (global-treesit-auto-mode))
-
-(use-package treesit-fold
-  :delight
-  :after treesit-auto
-  :bind
-  (:map treesit-fold-mode-map
-        ("<backtab>" . #'treesit-fold-toggle)))
 
 (defun es/list-scripts (file)
   "List scripts from package.json CONFIG."
@@ -569,8 +561,17 @@ Examples:
       (when root
         `(eglot--project ,root :marker ,marker)))))
 
+(defun eglot-managed-mode-hook-setup ()
+  "Setup for eglot-managed-mode."
+  (when (and (eglot-managed-p) (derived-mode-p 'mhtml-ts-mode))
+                (eglot--managed-mode -1))
+  (add-hook 'completion-at-point-functions
+            #'eglot-completion-at-point))
+
 (use-package eglot
-  :hook ((typescript-ts-mode tsx-ts-mode go-ts-mode) . eglot-ensure)
+  :hook (((typescript-ts-mode tsx-ts-mode go-ts-mode json-ts-mode)
+          . eglot-ensure)
+         (eglot-managed-mode . eglot-managed-mode-hook-setup))
   :custom
   (eglot-send-changes-idle-time 0.1)
   :bind
@@ -584,10 +585,9 @@ Examples:
         ("C-c x" . #'eglot-project-boot))
   :config
   (add-to-list 'project-find-functions #'eglot-project-find-function)
-  (add-hook 'eglot-managed-mode-hook
-            (lambda ()
-              (add-hook 'completion-at-point-functions
-                        #'eglot-completion-at-point))))
+  (add-to-list 'eglot-server-programs
+               '((jsonc-mode :language-id "jsonc")
+                 . ("vscode-json-languageserver" "--stdio"))))
 
 (defun custom-eglot-java-init-opts (server eglot-java-eclipse-jdt)
   '(:settings
@@ -789,6 +789,10 @@ Examples:
   :bind (:map markdown-mode-map
               ("C-c C-e" . markdown-do)))
 
+(use-package json-mode
+  :mode (("\\.json\\'" . json-mode)
+         ("\\.jsonc\\'" . jsonc-mode)))
+
 (defun vsplit (arg)
   "Split the current window into vertical windows."
   (interactive "p")
@@ -797,3 +801,33 @@ Examples:
     (split-window-right))
   (balance-windows)
   (init-fonts (* font-size (min 1 (/ 2.0 arg)))))
+
+(defun exec (&rest commands)
+  "Pipe shell COMMANDS together, returning the final output as a string."
+  (let ((cmd (mapconcat (lambda (c) (format "(%s)" c)) commands " | ")))
+    (shell-command-to-string cmd)))
+
+(defun stock-query (code)
+  (exec
+   (format "curl -s -m 0.1 http://qt.gtimg.cn/q=%s" code)
+   "iconv -f gbk -t utf-8"
+   "awk -F'~' 'NF {printf \"%s %s %+.2f%%%%\", $2, $4, $33}'"))
+
+(defvar stock-codes '("sh000001" "sz399001" "sz399006" "sh000680"))
+
+(defun stock-tick ()
+  "Update the minibuffer line with the current stock ticker information."
+  (setq minibuffer-line-format (stock-query (car stock-codes)))
+  (minibuffer-line--update)
+  (setq stock-codes (append (cdr stock-codes) (list (car stock-codes)))))
+
+(use-package minibuffer-line
+  :ensure nil
+  :config
+  (minibuffer-line-mode 1)
+  (when (and (boundp 'minibuffer-line-timer) minibuffer-line-timer)
+    (cancel-timer minibuffer-line-timer))
+  (setq minibuffer-line-timer (run-with-timer 0 5 #'stock-tick)))
+
+(use-package mhtml-ts-mode
+  :mode "\\.html\\'")
