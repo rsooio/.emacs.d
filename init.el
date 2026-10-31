@@ -112,7 +112,9 @@
 (use-package hideshow
   :delight hs-minor-mode
   :ensure nil
-  :hook ((emacs-lisp-mode) . hs-minor-mode)
+  :hook (prog-mode . hs-minor-mode)
+  :custom
+  (hs-allow-nesting t)
   :bind
   (:map hs-minor-mode-map
         ("<backtab>" . #'hs-toggle-hiding)))
@@ -125,14 +127,14 @@
   (disable-cursor-tracking move-end-of-line))
 
 ;; TODO: make emms work
-(use-package emms
-  :custom
-  (emms-source-file-default-directory "~/music")
-  (emms-player-list '(emms-player-mpv))
-  (emms-player-mpv-parameters '("--no-terminal" "--force-window=no" "--quiet"))
-  (emms-info-functions '(emms-info-exiftool emms-info-native))
-  :config
-  (emms-all))
+;; (use-package emms
+;;   :custom
+;;   (emms-source-file-default-directory "~/music")
+;;   (emms-player-list '(emms-player-mpv))
+;;   (emms-player-mpv-parameters '("--no-terminal" "--force-window=no" "--quiet"))
+;;   (emms-info-functions '(emms-info-exiftool emms-info-native))
+;;   :config
+;;   (emms-all))
 
 (use-package paredit
   :delight
@@ -250,8 +252,6 @@
         (princ line)
         (princ "\n")))))
 
-(use-package swagg)
-
 (defun apifox-upload ()
   "Upload API definitions to Apifox."
   (interactive)
@@ -285,6 +285,24 @@
   (let ((require-final-newline nil))
     (save-buffer)))
 
+(defun llm/extract-type ()
+  "Extract the typescript type from selected text using LLM."
+  (interactive)
+  (when-let* ((provider (make-llm-openai-compatible
+                         :url "https://api.deepseek.com"
+                         :key (getenv "DEEPSEEK_API_KEY")
+                         :chat-model "deepseek-v4-flash"))
+              (_ (use-region-p))
+              (content (buffer-substring-no-properties (region-beginning)
+                                                       (region-end)))
+              (prompt (llm-make-chat-prompt
+                       content
+                       :reasoning "none"
+                       :context "Extract the typescript type from the following text. Only return the type, no explanation."))
+              (response (llm-chat provider prompt)))
+    (kill-new response)
+    (message "Extracted type copied to clipboard.")))
+
 (use-package magit
   :custom
   (magit-display-buffer-function
@@ -299,7 +317,7 @@
   (magit-gptcommit-llm-provider (make-llm-openai-compatible
                                  :url "https://api.deepseek.com"
                                  :key (getenv "DEEPSEEK_API_KEY")
-                                 :chat-model "deepseek-v4-pro"))
+                                 :chat-model "deepseek-flash"))
   :init
   (require 'llm-openai)
   :config
@@ -446,6 +464,10 @@ Examples:
   :init
   (vertico-mode))
 
+;; (defun tsx-ts-indent-fix ()
+;;   (push '((parent-is "jsx_text") parent-bol typescript-ts-mode-indent-offset)
+;;         (alist-get 'tsx treesit-simple-indent-rules)))
+
 (use-package treesit-auto
   :custom
   (treesit-auto-install 'prompt)
@@ -453,13 +475,6 @@ Examples:
   :config
   (treesit-auto-add-to-auto-mode-alist 'all)
   (global-treesit-auto-mode))
-
-(use-package treesit-fold
-  :delight
-  :after treesit-auto
-  :bind
-  (:map treesit-fold-mode-map
-        ("<backtab>" . #'treesit-fold-toggle)))
 
 (defun es/list-scripts (file)
   "List scripts from package.json CONFIG."
@@ -497,6 +512,23 @@ Examples:
           ((file-name-parent-directory dir) (es/package-manager
                                              (file-name-parent-directory dir)))
           (t "npm"))))
+
+(defun es/node-top-level ()
+  (interactive)
+  "Go to the top-level node of the current JavaScript/TypeScript file."
+  (when-let* ((node (treesit-parent-until
+                     (treesit-node-at (point))
+                     (lambda (n)
+                       (member (treesit-node-type (treesit-node-parent n))
+                               '("program" "module"))))))
+    (buffer-substring-no-properties (treesit-node-start node)
+                                    (treesit-node-end node))))
+
+(defun node/eval ()
+  "Evaluate the current JavaScript buffer using node"
+  (interactive)
+  (named-compile (concat "npx tsx " (buffer-file-name))
+                 (format "js/eval(%s)" (buffer-name))))
 
 (defun eglot-project-boot/es ()
   (when-let* ((config (es/config-file))
@@ -569,10 +601,29 @@ Examples:
       (when root
         `(eglot--project ,root :marker ,marker)))))
 
+(defun eglot-server-programs--find (&optional interactive project)
+  (if (not (executable-find "rass"))
+      '("typescript-language-server" "--stdio")
+    ;; TODO: auto config eglot, tailwindcss, etc.
+    '("rass" "--" "typescript-language-server" "--stdio")))
+
+(defun eglot-server-programs--set (mode program)
+  (setcdr (seq-find (lambda (entry)
+                      (if (listp (car entry))
+                          (if (listp (caar entry))
+                              (memq mode (mapcar #'car (car entry)))
+                            (memq mode (car entry)))
+                        (eq (car entry) mode)))
+                    eglot-server-programs)
+          program))
+
 (use-package eglot
   :hook ((typescript-ts-mode tsx-ts-mode go-ts-mode) . eglot-ensure)
   :custom
   (eglot-send-changes-idle-time 0.1)
+  (eglot-code-action-indications nil)
+  :custom-face
+  (eglot-semantic-readonly ((t (:foreground "darkblue"))))
   :bind
   (:map eglot-mode-map
         ("C-c l r" . #'eglot-rename)
@@ -587,7 +638,8 @@ Examples:
   (add-hook 'eglot-managed-mode-hook
             (lambda ()
               (add-hook 'completion-at-point-functions
-                        #'eglot-completion-at-point))))
+                        #'eglot-completion-at-point)))
+  (eglot-server-programs--set 'typescript-ts-mode 'eglot-server-programs--find))
 
 (defun custom-eglot-java-init-opts (server eglot-java-eclipse-jdt)
   '(:settings
@@ -773,6 +825,9 @@ Examples:
   :config
   (eglot-java-lombok/init))
 
+(use-package kotlin-ts-mode
+  :mode "\\.kt\\'")
+
 (use-package clojure-mode
   :mode "\\.bb\\'")
 
@@ -785,9 +840,45 @@ Examples:
   (cider-font-lock-dynamically '(macro core function var deprecated))
   (cider-repl-display-help-banner nil))
 
+(use-package js-ts-mode
+  :ensure nil
+  :mode ("\\.js\\'" "\\.cjs\\'" "\\.mjs\\'"))
+
+(use-package typescript-ts-mode
+  :ensure nil
+  :mode ("\\.ts\\'" "\\.mts\\'" "\\.cts\\'"))
+
+(use-package tsx-ts-mode
+  :ensure nil
+  :mode ("\\.tsx\\'" "\\.jsx\\'"))
+
+(use-package mhtml-ts-mode
+  :mode "\\.html\\'")
+
+(use-package protobuf-ts-mode)
+
+(use-package node-repl
+  :vc (:url "https://github.com/rsooio/node-repl.el"))
+
 (use-package markdown-mode
   :bind (:map markdown-mode-map
               ("C-c C-e" . markdown-do)))
+
+(defun cursor-in-pattern-p (pattern)
+  "Check if the cursor is currently within a string."
+  (save-excursion
+    (let ((pos (point)))
+      (goto-char (point-min))
+      (let ((in-string nil))
+        (while (and (not in-string)
+                    (re-search-forward pattern nil t))
+          (setq in-string (and (>= pos (match-beginning 0))
+                               (< pos (match-end 0)))))
+        in-string))))
+
+(defun tsx/cursor-in-classname-p ()
+  "Check if the cursor is currently within a className attribute in a TSX file."
+  (cursor-in-pattern-p "className=\"[^\"]*\""))
 
 (defun vsplit (arg)
   "Split the current window into vertical windows."
@@ -797,3 +888,51 @@ Examples:
     (split-window-right))
   (balance-windows)
   (init-fonts (* font-size (min 1 (/ 2.0 arg)))))
+
+(defun exec (callback &rest commands)
+  "Pipe shell COMMANDS together, returning the final output as a string."
+  (let* ((cmd (mapconcat (lambda (c) (format "(%s)" c)) commands " | "))
+         (process-name (format "exec-process-%s" (org-id-uuid)))
+         (buffer-name (format "*%s*" process-name))
+         (process (start-process-shell-command process-name buffer-name cmd)))
+    (set-process-sentinel
+     process
+     (lambda (proc event)
+       (when (string= event "finished\n")
+         (with-current-buffer (process-buffer proc)
+           (funcall callback (buffer-string))
+           (kill-buffer (current-buffer))))))))
+
+(defun stocks-query (codes)
+  "Query stock information for a list of CODES."
+  (exec (concat "gtimg " (string-join codes " "))))
+
+(defun stock-query (code)
+  (exec
+   (format "curl -s http://qt.gtimg.cn/q=%s" code)
+   "iconv -f gbk -t utf-8"
+   "awk -F'~' 'NF {printf \"%s %s %+.2f%%%%\", $2, $4, $33}'"))
+
+(defvar stock-codes '("sh000001" "sz399001" "sz399006" "sh000680" "hkHSI" "usIXIC"))
+
+;; TODO: change color based on stock price change
+(defun stock-tick-callback (output)
+  "Callback function to update the minibuffer line with stock ticker information."
+  (when (not (string-empty-p (string-trim output)))
+    (setq minibuffer-line-format output)
+    (minibuffer-line--update)
+    (setq stock-codes (append (cdr stock-codes) (list (car stock-codes))))))
+
+(defun stock-tick ()
+  "Update the minibuffer line with the current stock ticker information."
+  (exec #'stock-tick-callback
+        (format "curl -s -m 0.5 http://qt.gtimg.cn/q=%s" (car stock-codes))
+        "iconv -f gbk -t utf-8"
+        "awk -F'~' 'NF {printf \"%s %s %+.2f%%%%\", $2, $4, $33}'"))
+
+(use-package minibuffer-line
+  :config
+  (minibuffer-line-mode 1)
+  (when (and (boundp 'minibuffer-line-timer) minibuffer-line-timer)
+    (cancel-timer minibuffer-line-timer))
+  (setq minibuffer-line-timer (run-with-timer 0 5 #'stock-tick)))
